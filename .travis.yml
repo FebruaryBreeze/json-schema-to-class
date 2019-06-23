@@ -1,0 +1,23 @@
+language: python
+cache: pip
+python:
+  - '3.6'
+install:
+  - pip install -r requirements.txt
+  - pip install flake8 pytest pytest-cov codecov -U
+  - pip install pygments
+script:
+  - python -m pytest --cov=json_schema_to_class
+  - python setup.py install
+  - json-schema-to-class tests/test_schema.json --indent 2 | pygmentize
+  - python -m flake8
+after_success:
+  - codecov --token=c0a011b5-78cc-499f-b412-9dea326974dc
+deploy:
+  provider: pypi
+  user: sfzhou
+  on:
+    branch: master
+  skip_existing: true
+  password:
+    secure: tA9Q7BJ7fOoee0vO9wo90e42GVOOW1bXFVyD3d5JSlsaB8ey3vXACtUGDOvQ7FJ91oiaZLomJLU0rzYQiZzclEJ90UVwBSyPONzKknFhZDmMmDASZ2h4dO4qcktvOZlw16gCSMMxzRLQoMl3hLGDVD9xMkGPDMPPHhLxxUCFAQ0rbXBrAZHWxI5++kUibIpG+G5dFYWptbDqscObr7ejMH4mvgxsdbTTNWo9r2MrOMQ+zs953TMCFLlzop7ozdQZe1lcde5GBOD3/W05LJRMoexg0hAwUroVYcLKRC9sYW1RMwUYVvizpjYgpgVZZk/LdGzGvqgBCpT+tlgGUyu/OYEgsDPFp92NKP/8BhkpYon2xMRvsTwTab1gh/28jn0YylIzeNPjz9ELC510mYingcac9b62AXqrlC8RkZcBZ6mgfEAlHaU5WUiLJXKOA8qOERvWXqMVHsAIBdUK3fcPhiY/HlO1m4WgImxdJFUxSWe4B+vMrRYVo69vtQW6cjYVARoEr+VDroYY7osynhYzxuyMoOXcQraNBZ5fFFqIvcIVMkIlYtzaT55CSA/xjR8+Q0IbwSAyUKNYRUy79QjMUVAQPppaLFss0bglUZWGthuDL9l9qaF/njIlK9C5d9RlN14HgJzwPc0f5X39c6uaejE1CmLMDbMulC5DREb+M78=

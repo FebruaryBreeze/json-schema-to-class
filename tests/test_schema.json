@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "lr_scheduler_configs",
+  "description": "LR Scheduler Configs for PyTorch",
+  "type": "array",
+  "items": {
+    "$ref": "#/definitions/lr_scheduler_config"
+  },
+  "definitions": {
+    "warm_up": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "number",
+          "default": 0.0
+        },
+        "steps": {
+          "type": "integer",
+          "default": 0
+        }
+      }
+    },
+    "lr_scheduler_config": {
+      "type": "object",
+      "properties": {
+        "lr_mode": {
+          "enum": [
+            "step",
+            "cos"
+          ],
+          "default": "cos"
+        },
+        "base_lr": {
+          "type": "number"
+        },
+        "target_lr": {
+          "type": "number",
+          "default": 0.0002
+        },
+        "decay_factor": {
+          "type": "number",
+          "default": 0.1
+        },
+        "milestones": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "default": [
+            0.3,
+            0.6,
+            0.9
+          ]
+        },
+        "lr_decay": {
+          "type": "number",
+          "default": 0.98
+        },
+        "warm_up": {
+          "$ref": "#/definitions/warm_up"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

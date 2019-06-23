@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "optimizer_wrapper_config",
+  "description": "Optimizer Wrapper Config",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "default": "SGD"
+    },
+    "momentum": {
+      "type": "number",
+      "default": null
+    },
+    "nesterov": {
+      "type": "number",
+      "default": null
+    },
+    "weight_decay": {
+      "type": "number",
+      "default": 1e-4
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/group_rule_config"
+      },
+      "default": [
+        {}
+      ]
+    }
+  },
+  "definitions": {
+    "group_rule_config": {
+      "type": "object",
+      "properties": {
+        "module_type_list": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "param_name_list": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "prefix_list": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "weight_decay": {
+          "type": "number",
+          "default": null
+        },
+        "refuse_if_match": {
+          "type": "boolean",
+          "default": false
+        },
+        "kwargs": {
+          "type": "object",
+          "properties": {
+            "lr": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}
