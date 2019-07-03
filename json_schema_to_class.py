@@ -233,7 +233,7 @@ class Parser:
 
 
 def generate_code(schema_path: Path) -> str:
-    with open(str(schema_path)) as f:
+    with open(str(schema_path), encoding='utf-8') as f:
         schema = json.load(f)
 
     parser = Parser()
