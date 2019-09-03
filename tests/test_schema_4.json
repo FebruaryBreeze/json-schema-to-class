@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "array_generation_test",
+  "type": "array",
+  "items": {
+    "type": "integer"
+  },
+  "default": [
+    14,
+    14
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "array_generation_test",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "age": {
+        "type": "number"
+      }
+    }
+  },
+  "default": [
+    {
+      "name": "SF-Zhou"
+    }
+  ],
+  "additionalProperties": false
+}

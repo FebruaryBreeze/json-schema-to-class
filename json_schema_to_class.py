@@ -27,22 +27,19 @@ class Item:
     def __init__(self, name: str):
         self.name = name
 
-    def to_json(self):
-        pairs = []
-        for key in dir(self):
-            if not key.startswith('_'):
-                value = getattr(self, key)
-                if not callable(value):
-                    pairs.append((key, value))
-        return dict(pairs)
-
     def class_name(self):
         return self.name.title().replace('_', '')
 
     def type_name(self):
         return self.class_name()
 
+    def is_inner_model(self):
+        return False
+
     def to_init_code(self) -> str:
+        raise NotImplementedError  # pragma: no cover
+
+    def to_list_code(self) -> str:
         raise NotImplementedError  # pragma: no cover
 
     def to_class_code(self, level: int = 0) -> str:
@@ -70,90 +67,49 @@ class Basic(Item):
     def to_init_code(self) -> str:
         return f'{spaces(2)}self.{self.name}: {self.type_name()} = values.get("{self.name}", {repr(self.default)})'
 
+    def to_list_code(self) -> str:
+        return f'{spaces(2)}self[:] = values'
+
     def to_class_code(self, level: int = 0):
         raise ValueError(f'Cannot convert [{self.type_name()}] to class!')
 
 
 class Definition(Item):
-    def __init__(self, name: str, path: str):
+    def __init__(self, name: str, class_type: str, path: str):
         super().__init__(name=name)
         self.path = path
+        self.class_type = class_type
+
+    def class_name(self):
+        return self.class_type.title().replace('_', '')
 
     def to_init_code(self) -> str:
         return f'{spaces(2)}self.{self.name} = {self.class_name()}(values=values.get("{self.name}"))'
+
+    def to_list_code(self) -> str:
+        return f'{spaces(2)}self[:] = [{self.class_name()}(value) for value in values]'
 
     def to_class_code(self, level: int = 0) -> str:
         raise ValueError(f'Cannot convert [{self.type_name()}] to class!')
 
 
-class Array(Basic):
-    use_list: bool = False
-
-    def __init__(self, name: str, items: Item = None, default: Any = None):
-        super().__init__(name=name, type=list, default=default)
-        self.items = items
-
-    def to_json(self):
-        return {
-            **super().to_json(),
-            'items': self.items.to_json()
-        }
-
-    def type_name(self):
-        Array.use_list = True
-        return f'List[{self.items.type_name()}]'
-
-    def to_init_code(self) -> str:
-        if isinstance(self.items, Basic):
-            return '{spaces}self.{name}: {type_name} = values.get("{name}", {default})'.format(
-                spaces=spaces(2),
-                name=self.name,
-                type_name=self.type_name(),
-                default=repr(self.default or [])
-            )
-        else:
-            return '{spaces}self.{name}: {type_name} = list(map({item_type}, values.get("{name}", {default})))'.format(
-                spaces=spaces(2),
-                name=self.name,
-                type_name=self.type_name(),
-                item_type=self.items.type_name(),
-                default=repr(self.default or [])
-            )
-
-    def to_class_code(self, level: int = 0) -> str:
-        result = [f'class {self.class_name()}:']
-        if isinstance(self.items, Model):
-            result.append(self.items.to_class_code(level=1))
-        result.append(f'{spaces(1)}def __init__(self, values: list = None):')
-        result.append(f'{spaces(2)}values = values if values is not None else []')
-        result.append(f'{spaces(2)}self.items: {self.type_name()} = [')
-        result.append(f'{spaces(3)}{self.items.type_name()}(values=value) for value in values')
-        result.append(f'{spaces(2)}]')
-        code = Config.line_break.join(result)
-        return indent_class(code=code, level=level)
-
-
 class Model(Item):
-    def __init__(self, name: str):
+    def __init__(self, name: str, default: Any = None):
         super().__init__(name=name)
         self.properties: List[Item] = []
-        self._in_definitions = False
+        self.default = default or {}
 
-    def set_in_definitions(self):
-        self._in_definitions = True
+    def is_inner_model(self):
+        return True
 
     def inner_models(self) -> List['Model']:
-        return [item for item in self.properties if isinstance(item, Model)]
-
-    def to_json(self):
-        return {
-            **super().to_json(),
-            'properties': dict((item.name, item.to_json()) for item in self.properties)
-        }
+        return [item for item in self.properties if item.is_inner_model()]
 
     def to_init_code(self):
-        prefix = '' if self._in_definitions else 'self.'
-        return f'{spaces(2)}self.{self.name} = {prefix}{self.class_name()}(values=values.get("{self.name}", None))'
+        return f'{spaces(2)}self.{self.name} = self.{self.class_name()}(values=values.get("{self.name}"))'
+
+    def to_list_code(self) -> str:
+        return f'{spaces(2)}self[:] = [self.{self.class_name()}(value) for value in values]'
 
     def to_class_code(self, level: int = 0) -> str:
         result = [f'class {self.class_name()}:']
@@ -161,10 +117,46 @@ class Model(Item):
             result.append(item.to_class_code(level=1))
             result.append('')
         result.append(f'{spaces(1)}def __init__(self, values: dict = None):')
-        result.append(f'{spaces(2)}values = values if values is not None else {{}}')
+        result.append(f'{spaces(2)}values = values if values is not None else {repr(self.default)}')
         result.append(Config.line_break.join(item.to_init_code() for item in self.properties))
-
         return indent_class(code=Config.line_break.join(result), level=level)
+
+
+class Array(Model):
+    use_list = False
+
+    def __init__(self, name: str, items: Item = None, default: Any = None):
+        super().__init__(name=name)
+        self.items = items
+        self.properties.append(items)
+        self.default = default
+
+    def is_inner_model(self):
+        return not isinstance(self.items, Basic)
+
+    def to_init_code(self) -> str:
+        if not self.is_inner_model():
+            Array.use_list = True
+            return '{spaces}self.{name}: {type_name} = values.get("{name}", {default})'.format(
+                spaces=spaces(2),
+                name=self.name,
+                type_name=f'List[{self.items.type_name()}]',
+                default=repr(self.default)
+            )
+
+        return f'{spaces(2)}self.{self.name} = self.{self.class_name()}(values=values.get("{self.name}"))'
+
+    def to_class_code(self, level: int = 0) -> str:
+        result = [f'class {self.class_name()}(list):']
+        for item in self.inner_models():
+            result.append(item.to_class_code(level=1))
+            result.append('')
+        result.append(f'{spaces(1)}def __init__(self, values: list = None):')
+        result.append(f'{spaces(2)}super().__init__()')
+        result.append(f'{spaces(2)}values = values if values is not None else {repr(self.default or [])}')
+        result.append(self.items.to_list_code())
+        code = Config.line_break.join(result)
+        return indent_class(code=code, level=level)
 
 
 class Parser:
@@ -203,8 +195,7 @@ class Parser:
             return Basic(name=name, type=type(first), default=default)
         elif '$ref' in schema:
             path = schema['$ref']
-            name = self.definitions[path].name
-            return Definition(name=name, path=path)
+            return Definition(name=name, class_type=self.definitions[path].name, path=path)
         else:
             raise ValueError(f'Cannot parse schema {repr(schema)}')
 
@@ -212,8 +203,6 @@ class Parser:
         for name, definition in schema.get('definitions', {}).items():
             item = self.parse_definition(name=name, schema=definition)
             self.definitions[f'#/definitions/{name}'] = item
-            if isinstance(item, Model):
-                item.set_in_definitions()
 
         name = schema['title']
         self.root = self.parse_definition(name=name, schema=schema)
@@ -258,20 +247,6 @@ def generate_dir(schema_dir: Path, output_dir: Path):
     init_content = Config.line_break.join(generate_modules) + Config.line_break
     init_path = output_dir / '__init__.py'
     lazy_write.write(init_path, init_content)
-
-
-def to_json(obj):
-    if obj is None:
-        return None
-    elif type(obj) in {int, float, str}:
-        return obj
-    elif isinstance(obj, list):
-        return [to_json(item) for item in obj]
-    else:
-        ret = {key: to_json(value) for key, value in vars(obj).items()}
-        if list(ret.keys()) == ['items'] and isinstance(ret['items'], list):  # for array class
-            ret = ret['items']
-        return ret
 
 
 def main():  # pragma: no cover

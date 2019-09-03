@@ -17,13 +17,10 @@ class MyTestCase(unittest.TestCase):
     def setUp(self):
         current_path: Path = Path(__file__).parent
         self.schema_path = current_path / 'test_schema.json'
-        self.schema_path_2 = current_path / 'test_schema_2.json'
         self.output_path = current_path / 'build' / 'test_schema.py'
 
         with open(str(self.schema_path)) as f:
             self.test_schema = json.load(f)
-        with open(str(self.schema_path_2)) as f:
-            self.test_schema_2 = json.load(f)
 
     def test_basic(self):
         parser = json_schema_to_class.Parser()
@@ -94,13 +91,6 @@ class MyTestCase(unittest.TestCase):
 
         self.assertRaises(ValueError, parse_empty_definition)
 
-    def test_to_structure(self):
-        parser = json_schema_to_class.Parser()
-        parser.parse(schema=self.test_schema)
-        for name, definition in parser.definitions.items():
-            self.assertIsNotNone(definition.to_json())
-        parser.parse(schema=self.test_schema_2)
-
     def test_json_schema_to_class(self):
         json_schema_to_class.generate_file(schema_path=self.schema_path, output_path=self.output_path)
         module = absolute_import(name='generate', module_path=self.output_path)
@@ -122,13 +112,11 @@ class MyTestCase(unittest.TestCase):
         ]
 
         obj = getattr(module, 'LrSchedulerConfigs')(values=[{}])
-        self.assertEqual(obj.items[0].warm_up.start, 0.0)
+        self.assertEqual(obj[0].warm_up.start, 0.0)
 
         obj = getattr(module, 'LrSchedulerConfigs')(values=values)
-        self.assertEqual(obj.items[0].milestones, [0.4, 0.7, 0.9])
-        self.assertEqual(obj.items[0].warm_up.start, 0.2)
-
-        self.assertEqual(json_schema_to_class.to_json(obj), values)
+        self.assertEqual(obj[0].milestones, [0.4, 0.7, 0.9])
+        self.assertEqual(obj[0].warm_up.start, 0.2)
 
     def test_generate_dir(self):
         json_schema_to_class.generate_dir(

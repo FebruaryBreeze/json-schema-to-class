@@ -47,10 +47,9 @@ class LrSchedulerConfig:
         self.warm_up = WarmUp(values=values.get("warm_up"))
 
 
-class LrSchedulerConfigs:
+class LrSchedulerConfigs(list):
     def __init__(self, values: list = None):
+        super().__init__()
         values = values if values is not None else []
-        self.items: List[LrSchedulerConfig] = [
-            LrSchedulerConfig(values=value) for value in values
-        ]
+        self[:] = [LrSchedulerConfig(value) for value in values]
 ```
