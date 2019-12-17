@@ -194,8 +194,9 @@ class Parser:
             assert type(first) in {int, float, str}, "Enum Type is not int, float or string"
             return Basic(name=name, type=type(first), default=default)
         elif '$ref' in schema:
-            path = schema['$ref']
-            return Definition(name=name, class_type=self.definitions[path].name, path=path)
+            path: str = schema['$ref']
+            class_type = path.split('/')[-1]
+            return Definition(name=name, class_type=class_type, path=path)
         else:
             raise ValueError(f'Cannot parse schema {repr(schema)}')
 
