@@ -9,6 +9,7 @@ import lazy_write
 class Config:
     indent: int = 4
     line_break: str = '\n'
+    add_repr_method: bool = True
 
 
 def spaces(level: int):
@@ -67,6 +68,11 @@ class Basic(Item):
     def to_init_code(self) -> str:
         return f'{spaces(2)}self.{self.name}: {self.type_name()} = values.get("{self.name}", {repr(self.default)})'
 
+    def to_repr_code(self):
+        if self.type is str:
+            return f'{spaces(2)}repr_string += f\'{self.name}=\"{{self.{self.name}}}\", \''
+        return f'{spaces(2)}repr_string += f"{self.name}={{self.{self.name}}}, "'
+
     def to_list_code(self) -> str:
         return f'{spaces(2)}self[:] = values'
 
@@ -89,6 +95,9 @@ class Definition(Item):
     def to_list_code(self) -> str:
         return f'{spaces(2)}self[:] = [{self.class_name()}(value) for value in values]'
 
+    def to_repr_code(self):
+        return f'{spaces(2)}repr_string += "{self.name}=" + str(self.{self.name}) + ", "'
+
     def to_class_code(self, level: int = 0) -> str:
         raise ValueError(f'Cannot convert [{self.type_name()}] to class!')
 
@@ -108,6 +117,9 @@ class Model(Item):
     def to_init_code(self):
         return f'{spaces(2)}self.{self.name} = self.{self.class_name()}(values=values.get("{self.name}"))'
 
+    def to_repr_code(self):
+        return f'{spaces(2)}repr_string += "{self.name}=" + str(self.{self.name}) + ", "'
+
     def to_list_code(self) -> str:
         return f'{spaces(2)}self[:] = [self.{self.class_name()}(value) for value in values]'
 
@@ -119,6 +131,13 @@ class Model(Item):
         result.append(f'{spaces(1)}def __init__(self, values: dict = None):')
         result.append(f'{spaces(2)}values = values if values is not None else {repr(self.default)}')
         result.append(Config.line_break.join(item.to_init_code() for item in self.properties))
+        result.append('')
+        if Config.add_repr_method:
+            result.append(f'{spaces(1)}def __repr__(self):')
+            result.append(f'{spaces(2)}repr_string = "{self.class_name()}["')
+            result.append(Config.line_break.join(item.to_repr_code() for item in self.properties))
+            result.append(f'{spaces(2)}repr_string += "]"')
+            result.append(f'{spaces(2)}return repr_string')
         return indent_class(code=Config.line_break.join(result), level=level)
 
 
@@ -255,9 +274,11 @@ def main():  # pragma: no cover
     arg_parser.add_argument('schema_path', type=str)
     arg_parser.add_argument('-o', '--output-path', type=str, default=None)
     arg_parser.add_argument('-i', '--indent', type=int, default=4)
+    arg_parser.add_argument('--no-repr', action="store_false", dest="repr_method", default=True)
 
     arguments = arg_parser.parse_args()
     Config.indent = arguments.indent
+    Config.add_repr_method = arguments.repr_method
 
     if arguments.output_path is None:
         print(generate_code(arguments.schema_path))
