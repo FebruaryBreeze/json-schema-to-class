@@ -12,7 +12,7 @@ from setuptools import setup
 class Package:
     name = 'json-schema-to-class'
     module = name.replace("-", "_")
-    version = '0.2.2'
+    version = '0.2.3'
     description = 'Convert JSON Schema into Python Class'
     keywords = 'JSON Schema Class'
     package_data = {}

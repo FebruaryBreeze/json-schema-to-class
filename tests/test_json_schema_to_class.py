@@ -124,6 +124,13 @@ class MyTestCase(unittest.TestCase):
             output_dir=self.output_path.parent
         )
 
+    def test_generate_dir_with_repr(self):
+        json_schema_to_class.Config.generate_repr_method = True
+        json_schema_to_class.generate_dir(
+            schema_dir=self.schema_path.parent,
+            output_dir=self.output_path.parent
+        )
+
 
 if __name__ == '__main__':
     unittest.main()

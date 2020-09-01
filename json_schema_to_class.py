@@ -9,7 +9,7 @@ import lazy_write
 class Config:
     indent: int = 4
     line_break: str = '\n'
-    add_repr_method: bool = True
+    generate_repr_method: bool = False
 
 
 def spaces(level: int):
@@ -57,9 +57,9 @@ class Basic(Item):
         'boolean': bool
     }
 
-    def __init__(self, name: str, type: type, default: Any = None):
+    def __init__(self, name: str, typename: type, default: Any = None):
         super().__init__(name=name)
-        self.type = type
+        self.type = typename
         self.default = default
 
     def type_name(self):
@@ -67,11 +67,6 @@ class Basic(Item):
 
     def to_init_code(self) -> str:
         return f'{spaces(2)}self.{self.name}: {self.type_name()} = values.get("{self.name}", {repr(self.default)})'
-
-    def to_repr_code(self):
-        if self.type is str:
-            return f'{spaces(2)}repr_string += f\'{self.name}=\"{{self.{self.name}}}\", \''
-        return f'{spaces(2)}repr_string += f"{self.name}={{self.{self.name}}}, "'
 
     def to_list_code(self) -> str:
         return f'{spaces(2)}self[:] = values'
@@ -95,9 +90,6 @@ class Definition(Item):
     def to_list_code(self) -> str:
         return f'{spaces(2)}self[:] = [{self.class_name()}(value) for value in values]'
 
-    def to_repr_code(self):
-        return f'{spaces(2)}repr_string += "{self.name}=" + str(self.{self.name}) + ", "'
-
     def to_class_code(self, level: int = 0) -> str:
         raise ValueError(f'Cannot convert [{self.type_name()}] to class!')
 
@@ -112,13 +104,10 @@ class Model(Item):
         return True
 
     def inner_models(self) -> List['Model']:
-        return [item for item in self.properties if item.is_inner_model()]
+        return [item for item in self.properties if item.is_inner_model() and isinstance(item, Model)]
 
     def to_init_code(self):
         return f'{spaces(2)}self.{self.name} = self.{self.class_name()}(values=values.get("{self.name}"))'
-
-    def to_repr_code(self):
-        return f'{spaces(2)}repr_string += "{self.name}=" + str(self.{self.name}) + ", "'
 
     def to_list_code(self) -> str:
         return f'{spaces(2)}self[:] = [self.{self.class_name()}(value) for value in values]'
@@ -131,13 +120,13 @@ class Model(Item):
         result.append(f'{spaces(1)}def __init__(self, values: dict = None):')
         result.append(f'{spaces(2)}values = values if values is not None else {repr(self.default)}')
         result.append(Config.line_break.join(item.to_init_code() for item in self.properties))
-        result.append('')
-        if Config.add_repr_method:
+        if Config.generate_repr_method:
+            result.append('')
             result.append(f'{spaces(1)}def __repr__(self):')
-            result.append(f'{spaces(2)}repr_string = "{self.class_name()}["')
-            result.append(Config.line_break.join(item.to_repr_code() for item in self.properties))
-            result.append(f'{spaces(2)}repr_string += "]"')
-            result.append(f'{spaces(2)}return repr_string')
+            result.append(f'{spaces(2)}return "{self.class_name()}[" + ", ".join((')
+            for item in self.properties:
+                result.append(f'{spaces(3)}f"{item.name}: {{repr(self.{item.name})}}",')
+            result.append(f'{spaces(2)})) + "]"')
         return indent_class(code=Config.line_break.join(result), level=level)
 
 
@@ -154,8 +143,8 @@ class Array(Model):
         return not isinstance(self.items, Basic)
 
     def to_init_code(self) -> str:
+        Array.use_list = True
         if not self.is_inner_model():
-            Array.use_list = True
             return '{spaces}self.{name}: {type_name} = values.get("{name}", {default})'.format(
                 spaces=spaces(2),
                 name=self.name,
@@ -163,7 +152,12 @@ class Array(Model):
                 default=repr(self.default)
             )
 
-        return f'{spaces(2)}self.{self.name} = self.{self.class_name()}(values=values.get("{self.name}"))'
+        return '{spaces}self.{name}: List[{item_type}] = self.{class_name}(values=values.get("{name}"))'.format(
+            spaces=spaces(2),
+            name=self.name,
+            class_name=self.class_name(),
+            item_type=self.items.type_name()
+        )
 
     def to_class_code(self, level: int = 0) -> str:
         result = [f'class {self.class_name()}(list):']
@@ -204,14 +198,14 @@ class Parser:
             elif item_type == 'array':
                 return self.parse_array(name=name, schema=schema)
             else:
-                return Basic(name=name, type=Basic.TYPE_MAP[item_type], default=default)
+                return Basic(name=name, typename=Basic.TYPE_MAP[item_type], default=default)
         elif 'enum' in schema:
             enum_list = schema['enum']
             assert len(enum_list) > 0, "Enum List is Empty"
             first = enum_list[0]
             assert all(type(first) == type(item) for item in enum_list), "Items in Enum List with Different Types"
             assert type(first) in {int, float, str}, "Enum Type is not int, float or string"
-            return Basic(name=name, type=type(first), default=default)
+            return Basic(name=name, typename=type(first), default=default)
         elif '$ref' in schema:
             path: str = schema['$ref']
             class_type = path.split('/')[-1]
@@ -274,11 +268,11 @@ def main():  # pragma: no cover
     arg_parser.add_argument('schema_path', type=str)
     arg_parser.add_argument('-o', '--output-path', type=str, default=None)
     arg_parser.add_argument('-i', '--indent', type=int, default=4)
-    arg_parser.add_argument('--no-repr', action="store_false", dest="repr_method", default=True)
+    arg_parser.add_argument('--repr', action='store_true', help='generate __repr__ method', default=False)
 
     arguments = arg_parser.parse_args()
     Config.indent = arguments.indent
-    Config.add_repr_method = arguments.repr_method
+    Config.generate_repr_method = arguments.repr
 
     if arguments.output_path is None:
         print(generate_code(arguments.schema_path))

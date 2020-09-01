@@ -20,6 +20,9 @@ json-schema-to-class tests/test_schema.json --indent 2 | pygmentize
 
 # or generate to file
 json-schema-to-class tests/test_schema.json -o tests/schema_build.py
+
+# generate code with __repr__ method
+json-schema-to-class tests/test_schema.json --indent 2 --repr | pygmentize
 ```
 
 Get `tests/schema_build.py` as follow:
