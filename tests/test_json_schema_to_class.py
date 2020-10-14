@@ -17,10 +17,15 @@ class MyTestCase(unittest.TestCase):
     def setUp(self):
         current_path: Path = Path(__file__).parent
         self.schema_path = current_path / 'test_schema.json'
+        self.schema_path_2 = current_path / 'test_schema_2.json'
         self.output_path = current_path / 'build' / 'test_schema.py'
+        self.validate_path = current_path / 'build' / 'test_schema_validate.py'
 
         with open(str(self.schema_path)) as f:
             self.test_schema = json.load(f)
+
+        json_schema_to_class.Config.generate_repr_method = False
+        json_schema_to_class.Config.generate_validate_code = False
 
     def test_basic(self):
         parser = json_schema_to_class.Parser()
@@ -130,6 +135,46 @@ class MyTestCase(unittest.TestCase):
             schema_dir=self.schema_path.parent,
             output_dir=self.output_path.parent
         )
+
+    def test_generate_dir_with_validate(self):
+        try:
+            __import__('jsonschema')
+        except ModuleNotFoundError:
+            print('validation requires jsonschema')
+            return
+
+        json_schema_to_class.Config.generate_validate_code = True
+        json_schema_to_class.generate_file(self.schema_path, self.validate_path)
+        module = absolute_import(name='validate', module_path=self.validate_path)
+        self.assertIsNotNone(module)
+
+        cls = getattr(module, 'LrSchedulerConfigs')
+        self.assertIsNotNone(cls)
+
+        cls([])
+        cls([{}])
+
+        values = [
+            {
+                "base_lr": 0.1,
+                "decay_factor": 0.99,
+                "lr_decay": 0.1,
+                "lr_mode": "cos",
+                "target_lr": 0.0002,
+                "milestones": [0.4, 0.7, 0.9],
+                "warm_up": {
+                    "start": 0.2,
+                    "steps": 1024
+                }
+            }
+        ]
+        cls(values)
+
+        values[0]['base_lr'] = '0.1'  # except validate error
+        with self.assertRaises(Exception):
+            cls(values)
+
+        json_schema_to_class.generate_file(self.schema_path_2, self.validate_path)
 
 
 if __name__ == '__main__':

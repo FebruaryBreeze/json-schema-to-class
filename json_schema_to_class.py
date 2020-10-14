@@ -10,6 +10,7 @@ class Config:
     indent: int = 4
     line_break: str = '\n'
     generate_repr_method: bool = False
+    generate_validate_code: bool = False
 
 
 def spaces(level: int):
@@ -43,7 +44,7 @@ class Item:
     def to_list_code(self) -> str:
         raise NotImplementedError  # pragma: no cover
 
-    def to_class_code(self, level: int = 0) -> str:
+    def to_class_code(self, level: int = 0, schema: dict = None) -> str:
         raise NotImplementedError  # pragma: no cover
 
 
@@ -71,7 +72,7 @@ class Basic(Item):
     def to_list_code(self) -> str:
         return f'{spaces(2)}self[:] = values'
 
-    def to_class_code(self, level: int = 0):
+    def to_class_code(self, level: int = 0, schema: dict = None):
         raise ValueError(f'Cannot convert [{self.type_name()}] to class!')
 
 
@@ -90,7 +91,7 @@ class Definition(Item):
     def to_list_code(self) -> str:
         return f'{spaces(2)}self[:] = [{self.class_name()}(value) for value in values]'
 
-    def to_class_code(self, level: int = 0) -> str:
+    def to_class_code(self, level: int = 0, schema: dict = None) -> str:
         raise ValueError(f'Cannot convert [{self.type_name()}] to class!')
 
 
@@ -112,13 +113,29 @@ class Model(Item):
     def to_list_code(self) -> str:
         return f'{spaces(2)}self[:] = [self.{self.class_name()}(value) for value in values]'
 
-    def to_class_code(self, level: int = 0) -> str:
-        result = [f'class {self.class_name()}:']
+    @staticmethod
+    def generate_schema_code(result: List[str], schema: dict = None) -> None:
+        if Config.generate_validate_code and schema is not None:
+            lines = f'SCHEMA = json.loads("""{json.dumps(schema, indent=Config.indent)}""")'.splitlines()
+            result += [indent_line(line, 1) for line in lines] + ['']
+
+    @staticmethod
+    def generate_validate_code(result: List[str], schema: dict = None) -> None:
+        if Config.generate_validate_code and schema is not None:
+            result.append(f'{spaces(2)}jsonschema.validate(values, self.SCHEMA)')
+
+    def generate_inner_modes_code(self, result: List[str]) -> None:
         for item in self.inner_models():
             result.append(item.to_class_code(level=1))
             result.append('')
+
+    def to_class_code(self, level: int = 0, schema: dict = None) -> str:
+        result = [f'class {self.class_name()}:']
+        self.generate_schema_code(result, schema)
+        self.generate_inner_modes_code(result)
         result.append(f'{spaces(1)}def __init__(self, values: dict = None):')
         result.append(f'{spaces(2)}values = values if values is not None else {repr(self.default)}')
+        self.generate_validate_code(result, schema)
         result.append(Config.line_break.join(item.to_init_code() for item in self.properties))
         if Config.generate_repr_method:
             result.append('')
@@ -159,14 +176,14 @@ class Array(Model):
             item_type=self.items.type_name()
         )
 
-    def to_class_code(self, level: int = 0) -> str:
+    def to_class_code(self, level: int = 0, schema: dict = None) -> str:
         result = [f'class {self.class_name()}(list):']
-        for item in self.inner_models():
-            result.append(item.to_class_code(level=1))
-            result.append('')
+        self.generate_schema_code(result, schema)
+        self.generate_inner_modes_code(result)
         result.append(f'{spaces(1)}def __init__(self, values: list = None):')
         result.append(f'{spaces(2)}super().__init__()')
         result.append(f'{spaces(2)}values = values if values is not None else {repr(self.default or [])}')
+        self.generate_validate_code(result, schema)
         result.append(self.items.to_list_code())
         code = Config.line_break.join(result)
         return indent_class(code=code, level=level)
@@ -221,18 +238,22 @@ class Parser:
         name = schema['title']
         self.root = self.parse_definition(name=name, schema=schema)
 
-    def generate(self) -> str:
+    def generate(self, schema: dict) -> str:
         Array.use_list = False
         result = []
         for _, definition in self.definitions.items():
             result.append(definition.to_class_code(level=0))
             result.append('')
             result.append('')
-        result.append(self.root.to_class_code(level=0))
+        result.append(self.root.to_class_code(level=0, schema=schema))
 
+        headers = []
         if Array.use_list:
-            result = ['from typing import List', '', ''] + result
-        return Config.line_break.join(result) + Config.line_break
+            headers += ['from typing import List']
+        if Config.generate_validate_code:
+            headers = ['import json'] + headers + ['', 'import jsonschema']
+        headers += ['', '']
+        return Config.line_break.join(headers + result) + Config.line_break
 
 
 def generate_code(schema_path: Path) -> str:
@@ -241,7 +262,7 @@ def generate_code(schema_path: Path) -> str:
 
     parser = Parser()
     parser.parse(schema=schema)
-    return parser.generate()
+    return parser.generate(schema=schema)
 
 
 def generate_file(schema_path: Path, output_path: Path):
@@ -269,10 +290,12 @@ def main():  # pragma: no cover
     arg_parser.add_argument('-o', '--output-path', type=str, default=None)
     arg_parser.add_argument('-i', '--indent', type=int, default=4)
     arg_parser.add_argument('--repr', action='store_true', help='generate __repr__ method', default=False)
+    arg_parser.add_argument('--validate', action='store_true', help='validate schema', default=False)
 
     arguments = arg_parser.parse_args()
     Config.indent = arguments.indent
     Config.generate_repr_method = arguments.repr
+    Config.generate_validate_code = arguments.validate
 
     if arguments.output_path is None:
         print(generate_code(arguments.schema_path))

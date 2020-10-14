@@ -5,7 +5,7 @@ python:
 install:
   - pip install -r requirements.txt
   - pip install flake8 pytest pytest-cov codecov -U
-  - pip install pygments
+  - pip install pygments jsonschema
 script:
   - python -m pytest --cov=json_schema_to_class
   - python setup.py install
