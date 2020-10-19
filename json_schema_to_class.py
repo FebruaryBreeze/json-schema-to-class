@@ -252,7 +252,8 @@ class Parser:
             headers += ['from typing import List']
         if Config.generate_validate_code:
             headers = ['import json'] + headers + ['', 'import jsonschema']
-        headers += ['', '']
+        if len(headers) > 0:
+            headers += ['', '']
         return Config.line_break.join(headers + result) + Config.line_break
 
 
