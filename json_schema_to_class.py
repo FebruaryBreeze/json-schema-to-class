@@ -11,6 +11,7 @@ class Config:
     line_break: str = '\n'
     generate_repr_method: bool = False
     generate_validate_code: bool = False
+    generated_warning: bool = True
 
 
 def spaces(level: int):
@@ -252,6 +253,8 @@ class Parser:
             headers += ['from typing import List']
         if Config.generate_validate_code:
             headers = ['import json'] + headers + ['', 'import jsonschema']
+        if Config.generated_warning:
+            headers = ['"""This file is generated. DO NOT EDIT IT MANUALLY!"""'] + headers
         if len(headers) > 0:
             headers += ['', '']
         return Config.line_break.join(headers + result) + Config.line_break
@@ -292,11 +295,15 @@ def main():  # pragma: no cover
     arg_parser.add_argument('-i', '--indent', type=int, default=4)
     arg_parser.add_argument('--repr', action='store_true', help='generate __repr__ method', default=False)
     arg_parser.add_argument('--validate', action='store_true', help='validate schema', default=False)
+    arg_parser.add_argument(
+        '--no-warning', dest="generated_warning", action='store_false', help='add a generated warning', default=True
+    )
 
     arguments = arg_parser.parse_args()
     Config.indent = arguments.indent
     Config.generate_repr_method = arguments.repr
     Config.generate_validate_code = arguments.validate
+    Config.generated_warning = arguments.generated_warning
 
     if arguments.output_path is None:
         print(generate_code(arguments.schema_path))
